@@ -834,7 +834,8 @@ RuntimeDyldImpl::emitSection(const ObjectFile &Obj,
   uintptr_t Allocate;
   unsigned SectionID = Sections.size();
   uint8_t *Addr;
-  uint64_t LoadAddress = 0;
+  // Initialize load address
+  uint64_t LoadAddress = Section.getAddress();
   const char *pData = nullptr;
 
   // If this section contains any bits (i.e. isn't a virtual or bss section),
@@ -917,8 +918,8 @@ RuntimeDyldImpl::emitSection(const ObjectFile &Obj,
       SectionEntry(Name, Addr, DataSize, Allocate, (uintptr_t)pData));
 
   // The load address of a TLS section is not equal to the address of its
-  // initialization image
-  if (IsTLS)
+  // initialization image (or if virtual address via load address)
+  if (IsTLS || (LoadAddress != 0))
     Sections.back().setLoadAddress(LoadAddress);
   // Debug info sections are linked as if their load address was zero
   if (!IsRequired)

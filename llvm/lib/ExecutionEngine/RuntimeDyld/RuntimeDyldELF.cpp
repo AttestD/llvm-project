@@ -260,6 +260,28 @@ void RuntimeDyldELF::resolveX86_64Relocation(const SectionEntry &Section,
                                              uint64_t Offset, uint64_t Value,
                                              uint32_t Type, int64_t Addend,
                                              uint64_t SymOffset) {
+
+  // Adjust by load address if present
+  uint64_t loadAddr = Section.getLoadAddress();
+  if (loadAddr) {
+    Value -= loadAddr;
+  }
+  // Skip some sections which do not follow these relocation steps
+  if (Section.getName().contains("__kcrctab") || Section.getName().contains("data..percpu")) {
+    return;
+  } else if (Type == ELF::R_X86_64_32S) {
+    // Skip some relocations which would assert otherwise
+    uint64_t test = Value + Addend;
+    if (((int64_t)test > INT32_MAX) || ((int64_t)test < INT32_MIN)) {
+      return;
+    }
+  } else if (Type == ELF::R_X86_64_PC32) {
+    int64_t test = Value + Addend - Section.getLoadAddressWithOffset(Offset);
+    if (!isInt<32>(test)) {
+      return;
+    }
+  }
+
   switch (Type) {
   default:
     report_fatal_error("Relocation type not implemented yet!");
@@ -1301,6 +1323,12 @@ RuntimeDyldELF::processRelocationRef(
   }
 
   uint64_t Offset = RelI->getOffset();
+
+  // Adjust offset by load address if present
+  uint64_t loadAddr = Sections[SectionID].getLoadAddress();
+  if (loadAddr) {
+    Offset -= loadAddr;
+  }
 
   LLVM_DEBUG(dbgs() << "\t\tSectionID: " << SectionID << " Offset: " << Offset
                     << "\n");
